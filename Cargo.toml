@@ -1,0 +1,17 @@
+[package]
+name = "asm2x6xtool"
+description = "configuration and firmware management for ASM2x6x chips"
+version = "0.1.0"
+authors = ["Sven Peter <sven@svenpeter.dev>"]
+homepage = "https://github.com/svenpeter42/asm2x6xtool"
+repository = "https://github.com/svenpeter42/asm2x6xtool"
+edition = "2021"
+license = "GPL-3.0-only"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "4.4.18", features = ["derive"] }
+env_logger = "0.11.0"
+log = "0.4.20"
+rusb = "0.9.3"
