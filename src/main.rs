@@ -16,28 +16,93 @@
  */
 
 use asm2x6xtool::*;
+use clap::{Parser, Subcommand};
 use env_logger::{Builder, Env};
+use log::info;
 use std::fs::File;
 use std::io::Write;
+use std::path::PathBuf;
+
+#[derive(Subcommand)]
+enum Commands {
+    /// read firmware from device to file
+    ReadFirmware {
+        /// file to write firmware to
+        #[arg(short, long)]
+        output: PathBuf,
+    },
+
+    /// read configuration from device to file
+    ReadConfiguration {
+        /// file to write configuration to
+        #[arg(short, long)]
+        output: PathBuf,
+    },
+
+    /// list all connected devices
+    ListDevices,
+}
+
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    /// Optional device name to operate on
+    #[arg(short, long)]
+    device: Option<String>,
+
+    #[command(subcommand)]
+    command: Commands,
+}
+
+fn find_device(name: Option<String>) -> Result<asm2x6x::Device, Box<dyn std::error::Error>> {
+    let devices = usb::Devices::enumerate()?;
+
+    if devices.is_empty() {
+        return Err("no devices found".into());
+    }
+
+    if name.is_none() {
+        let usbdev = usb::Device::new(devices.into_iter().next().unwrap())?;
+        return Ok(asm2x6x::Device::new(Box::new(usbdev)));
+    }
+
+    todo!("parse name and find matching device");
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     Builder::from_env(Env::default().default_filter_or("debug")).init();
 
-    let devices = usb::Devices::enumerate()?;
+    let cli = Cli::parse();
 
-    for device in devices.into_iter() {
-        println!("device: {:?}", device);
-        let usbdev = usb::Device::new(device)?;
-        let mut device = asm2x6x::Device::new(Box::new(usbdev));
+    match &cli.command {
+        Commands::ReadFirmware { output } => {
+            let mut device = find_device(cli.device)?;
 
-        println!("firmware version: {}", device.read_fw_version()?);
+            info!("reading firmware");
+            File::create(output)?.write_all(&device.read_firmware()?)?;
+        }
 
-        println!("reading configuration");
-        File::create("config.b")?.write_all(&device.read_config()?)?;
+        Commands::ReadConfiguration { output } => {
+            let mut device = find_device(cli.device)?;
 
-        println!("reading firmware");
-        let fw = device.read_firmware()?;
-        File::create("firmware.b")?.write_all(&fw)?;
+            info!("reading configuration");
+            File::create(output)?.write_all(&device.read_config()?)?;
+        }
+
+        Commands::ListDevices => {
+            let devices = usb::Devices::enumerate()?;
+
+            if devices.is_empty() {
+                info!("no devices found");
+            }
+
+            for device in devices.into_iter() {
+                info!(
+                    "usb:{:03x}:{:03x} - {}",
+                    device.usb_bus, device.usb_addr, device.model
+                );
+            }
+        }
     }
 
     Ok(())

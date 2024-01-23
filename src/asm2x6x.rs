@@ -16,13 +16,20 @@
  */
 
 use crate::error::Error;
-use std::fmt::Display;
-use std::fmt::Formatter;
+use std::fmt::{Display, Formatter};
 use std::vec::Vec;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Model {
     ASM2464PD,
+}
+
+impl Display for Model {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Model::ASM2464PD => write!(f, "ASM2464PD"),
+        }
+    }
 }
 
 #[allow(dead_code)]
