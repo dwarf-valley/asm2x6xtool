@@ -18,6 +18,7 @@
 use crate::error::Error;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::vec::Vec;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Model {
@@ -125,14 +126,33 @@ impl Device {
         Ok(bfr)
     }
 
-    pub fn read_firmware(&mut self, bfr: &mut [u8]) -> Result<(), Error> {
-        let mut cdb = [Command::FlashRead as u8, 0x50, 0x00, 0x00, 0x00, 0x00];
+    pub fn read_firmware(&mut self) -> Result<Vec<u8>, Error> {
+        let mut bfr = vec![0_u8; 0x17ee0];
 
-        cdb[2] = (bfr.len() >> 16) as u8;
-        cdb[3] = (bfr.len() >> 8) as u8;
-        cdb[4] = bfr.len() as u8;
+        let mut cdb = [Command::FlashRead as u8, 0x00, 0x00, 0x00, 0x00, 0x00];
 
-        self.backend.transfer_from_device(&cdb, bfr)?;
-        Ok(())
+        // first part, 0x0 to 0xff00
+        cdb[1] = 0x50;
+        cdb[2] = 0x00;
+        cdb[3] = 0xff;
+        cdb[4] = 0x00;
+        self.backend
+            .transfer_from_device(&cdb, &mut bfr[..0xff00])?;
+
+        // the device sometimes dies if the next transfer is requested too quickly
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+
+        // second part, 0xff00 - 0x17ee0
+        cdb[1] = 0xd0;
+        cdb[2] = 0x00;
+        cdb[3] = 0x7f;
+        cdb[4] = 0xe0;
+        self.backend
+            .transfer_from_device(&cdb, &mut bfr[0xff00..])?;
+
+        // the device sometimes dies if the next transfer is requested too quickly
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+
+        Ok(bfr)
     }
 }

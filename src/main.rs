@@ -36,8 +36,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         File::create("config.b")?.write_all(&device.read_config()?)?;
 
         println!("reading firmware");
-        let mut fw = [0_u8; 0xff00];
-        device.read_firmware(&mut fw)?;
+        let fw = device.read_firmware()?;
         File::create("firmware.b")?.write_all(&fw)?;
     }
 
