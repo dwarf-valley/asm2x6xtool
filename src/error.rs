@@ -17,7 +17,7 @@
 
 use std::fmt::{Display, Formatter};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum Error {
     USB(rusb::Error),
     InvalidCDB,
@@ -27,6 +27,11 @@ pub enum Error {
     InvalidCSWTag,
     NoTransferPending,
     CSWResidue(u32),
+    IO(std::io::Error),
+    #[cfg(target_os = "linux")]
+    Nix(nix::Error),
+    #[cfg(target_os = "linux")]
+    SgIoError,
 }
 
 impl std::error::Error for Error {}
@@ -34,6 +39,12 @@ impl std::error::Error for Error {}
 impl From<rusb::Error> for Error {
     fn from(err: rusb::Error) -> Self {
         Error::USB(err)
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Self {
+        Error::IO(err)
     }
 }
 
@@ -48,6 +59,11 @@ impl Display for Error {
             Error::InvalidCSWTag => write!(f, "Invalid CSW tag"),
             Error::NoTransferPending => write!(f, "No transfer pending"),
             Error::CSWResidue(residue) => write!(f, "CSW residue > 0: {}", residue),
+            Error::IO(err) => write!(f, "IO error: {}", err),
+            #[cfg(target_os = "linux")]
+            Error::Nix(err) => write!(f, "Nix error: {}", err),
+            #[cfg(target_os = "linux")]
+            Error::SgIoError => write!(f, "SG_IO ioctl failed"),
         }
     }
 }

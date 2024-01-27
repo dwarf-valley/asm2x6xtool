@@ -58,6 +58,9 @@ struct Cli {
 pub fn find_devices() -> Result<Vec<Box<dyn Info>>, crate::error::Error> {
     let mut devices = Vec::<Box<dyn Info>>::new();
 
+    #[cfg(target_os = "linux")]
+    crate::linux::find_devices(&mut devices)?;
+
     crate::usb::find_devices(&mut devices)?;
 
     Ok(devices)
