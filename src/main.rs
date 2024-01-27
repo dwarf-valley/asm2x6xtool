@@ -29,14 +29,12 @@ enum Commands {
     /// read firmware from device to file
     ReadFirmware {
         /// file to write firmware to
-        #[arg(short, long)]
         output: PathBuf,
     },
 
     /// read configuration from device to file
     ReadConfiguration {
         /// file to write configuration to
-        #[arg(short, long)]
         output: PathBuf,
     },
 
