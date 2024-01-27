@@ -20,7 +20,6 @@ use crate::error::Error;
 use log::{debug, error, info};
 use rusb::UsbContext;
 use std::string::ToString;
-use std::vec::IntoIter;
 
 const ASMEDIA_VID: u16 = 0x174c;
 const CBW_SIGNATURE: u32 = 0x43425355;
@@ -45,7 +44,45 @@ impl ToString for DeviceInfo {
 
 impl Info for DeviceInfo {
     fn open(&self) -> Result<Box<dyn Backend>, Error> {
-        Ok(Box::new(Device::new(self)?))
+        let mut handle = self.device.open()?;
+
+        if handle.kernel_driver_active(0)? {
+            info!("detaching kernel driver from {:?}", self);
+            if let Err(err) = handle.detach_kernel_driver(0) {
+                error!("failed to detach kernel driver from {:?}: {}", self, err);
+                return Err(Error::USB(err));
+            }
+        }
+
+        debug!("claiming interface 0 on {:?}", self);
+        handle.claim_interface(0)?;
+
+        debug!("resetting usb storage interface");
+        handle.write_control(
+            rusb::request_type(
+                rusb::Direction::Out,
+                rusb::RequestType::Class,
+                rusb::Recipient::Interface,
+            ),
+            USBSTORAGE_RESET_REQUEST,
+            0,
+            0,
+            &[],
+            TIMEOUT,
+        )?;
+        std::thread::sleep(std::time::Duration::from_micros(10000));
+        handle.clear_halt(0x02)?;
+        std::thread::sleep(std::time::Duration::from_micros(10000));
+        handle.clear_halt(0x81)?;
+        std::thread::sleep(std::time::Duration::from_micros(10000));
+
+        debug!("device successfully initialized");
+        Ok(Box::new(Device {
+            info: self.clone(),
+            handle,
+            tag: 0xdeadbeef,
+            pending: false,
+        }))
     }
 
     fn model(&self) -> Model {
@@ -122,114 +159,43 @@ impl TryFrom<&[u8; 13]> for CSW {
 }
 
 pub fn find_devices(devices: &mut Vec<Box<dyn Info>>) -> Result<(), Error> {
-    let usb_devices = Devices::enumerate()?;
-    for device in usb_devices.into_iter() {
-        devices.push(Box::new(device));
+    let rusb_devices = rusb::Context::new()?.devices()?;
+
+    for dev in rusb_devices.iter() {
+        let desc = dev.device_descriptor()?;
+        let vid = desc.vendor_id();
+        let pid = desc.product_id();
+        let usb_bus = dev.bus_number();
+        let usb_addr = dev.address();
+
+        debug!(
+            "Bus {:03} Device {:03} ID {:04x}:{:04x}",
+            dev.bus_number(),
+            dev.address(),
+            vid,
+            pid
+        );
+
+        if vid != ASMEDIA_VID {
+            continue;
+        }
+
+        if pid != 0x2463 {
+            continue;
+        }
+
+        devices.push(Box::new(DeviceInfo {
+            device: dev,
+            model: Model::ASM2464PD,
+            usb_bus,
+            usb_addr,
+        }));
     }
 
     Ok(())
 }
 
-impl Devices {
-    pub fn enumerate() -> Result<Self, rusb::Error> {
-        let rusb_devices = rusb::Context::new()?.devices()?;
-        let mut devices = vec![];
-
-        for dev in rusb_devices.iter() {
-            let desc = dev.device_descriptor()?;
-            let vid = desc.vendor_id();
-            let pid = desc.product_id();
-            let usb_bus = dev.bus_number();
-            let usb_addr = dev.address();
-
-            debug!(
-                "Bus {:03} Device {:03} ID {:04x}:{:04x}",
-                dev.bus_number(),
-                dev.address(),
-                vid,
-                pid
-            );
-
-            if vid != ASMEDIA_VID {
-                continue;
-            }
-
-            if pid != 0x2463 {
-                continue;
-            }
-
-            devices.push(DeviceInfo {
-                device: dev,
-                model: Model::ASM2464PD,
-                usb_bus,
-                usb_addr,
-            });
-        }
-
-        Ok(Devices(devices))
-    }
-
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-}
-
-impl IntoIterator for Devices {
-    type Item = DeviceInfo;
-    type IntoIter = IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
-}
-
 impl Device {
-    pub fn new(info: &DeviceInfo) -> Result<Self, rusb::Error> {
-        let mut handle = info.device.open()?;
-
-        if handle.kernel_driver_active(0)? {
-            info!("detaching kernel driver from {:?}", info);
-            if let Err(err) = handle.detach_kernel_driver(0) {
-                error!("failed to detach kernel driver from {:?}: {}", info, err);
-                return Err(err);
-            }
-        }
-
-        debug!("claiming interface 0 on {:?}", info);
-        handle.claim_interface(0)?;
-
-        debug!("resetting usb storage interface");
-        handle.write_control(
-            rusb::request_type(
-                rusb::Direction::Out,
-                rusb::RequestType::Class,
-                rusb::Recipient::Interface,
-            ),
-            USBSTORAGE_RESET_REQUEST,
-            0,
-            0,
-            &[],
-            TIMEOUT,
-        )?;
-        std::thread::sleep(std::time::Duration::from_micros(10000));
-        handle.clear_halt(0x02)?;
-        std::thread::sleep(std::time::Duration::from_micros(10000));
-        handle.clear_halt(0x81)?;
-        std::thread::sleep(std::time::Duration::from_micros(10000));
-
-        debug!("device successfully initialized");
-        Ok(Device {
-            info: info.clone(),
-            handle,
-            tag: 0xdeadbeef,
-            pending: false,
-        })
-    }
-
     fn send_cbw(&mut self, cdb: &[u8], direction: CBWDirection, length: u32) -> Result<(), Error> {
         if cdb.len() > 16 {
             return Err(Error::InvalidCDB);
