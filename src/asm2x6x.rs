@@ -60,9 +60,9 @@ pub struct FWVersion {
     day: u8,
     month: u8,
     year: u8,
-    major: u8,
-    minor: u8,
-    patch: u8,
+    a: u8, // possibly silicon revision/die ID
+    b: u8,
+    c: u8,
 }
 
 impl Display for FWVersion {
@@ -70,7 +70,7 @@ impl Display for FWVersion {
         write!(
             f,
             "{:02x}{:02x}{:02x}_{:02x}_{:02x}_{:02x}",
-            self.year, self.month, self.day, self.major, self.minor, self.patch
+            self.year, self.month, self.day, self.a, self.b, self.c
         )
     }
 }
@@ -120,9 +120,9 @@ impl Device {
             year: bfr[0],
             month: bfr[1],
             day: bfr[2],
-            major: bfr[3],
-            minor: bfr[4],
-            patch: bfr[5],
+            a: bfr[3],
+            b: bfr[4],
+            c: bfr[5],
         })
     }
 
