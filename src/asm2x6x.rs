@@ -146,8 +146,9 @@ impl Device {
         // first part, 0x0 to 0xff00
         cdb[1] = 0x50;
         cdb[2] = 0x00;
-        cdb[3] = 0xff;
-        cdb[4] = 0x00;
+        cdb[3] = 0x00;
+        cdb[4] = 0xff;
+        cdb[5] = 0x00;
         self.backend
             .transfer_from_device(&cdb, &mut bfr[..0xff00])?;
 
@@ -157,8 +158,9 @@ impl Device {
         // second part, 0xff00 - 0x17ee0
         cdb[1] = 0xd0;
         cdb[2] = 0x00;
-        cdb[3] = 0x7f;
-        cdb[4] = 0xe0;
+        cdb[3] = 0x00;
+        cdb[4] = 0x7f;
+        cdb[5] = 0xe0;
         self.backend
             .transfer_from_device(&cdb, &mut bfr[0xff00..])?;
 
