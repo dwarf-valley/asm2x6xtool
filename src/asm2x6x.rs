@@ -52,6 +52,11 @@ pub trait Backend {
     fn transfer_from_device(&mut self, cdb: &[u8], data: &mut [u8]) -> Result<(), Error>;
 }
 
+pub trait Info: ToString {
+    fn model(&self) -> Model;
+    fn open(&self) -> Result<Box<dyn Backend>, Error>;
+}
+
 pub struct Device {
     backend: Box<dyn Backend>,
 }

@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::asm2x6x::{Backend, Model};
+use crate::asm2x6x::{Backend, Info, Model};
 use crate::error::Error;
 use log::{debug, error, info};
 use rusb::UsbContext;
@@ -40,6 +40,16 @@ pub struct DeviceInfo {
 impl ToString for DeviceInfo {
     fn to_string(&self) -> String {
         format!("usb:{:03}:{:03}", self.usb_bus, self.usb_addr,)
+    }
+}
+
+impl Info for DeviceInfo {
+    fn open(&self) -> Result<Box<dyn Backend>, Error> {
+        Ok(Box::new(Device::new(self)?))
+    }
+
+    fn model(&self) -> Model {
+        self.model
     }
 }
 
@@ -111,6 +121,15 @@ impl TryFrom<&[u8; 13]> for CSW {
     }
 }
 
+pub fn find_devices(devices: &mut Vec<Box<dyn Info>>) -> Result<(), Error> {
+    let usb_devices = Devices::enumerate()?;
+    for device in usb_devices.into_iter() {
+        devices.push(Box::new(device));
+    }
+
+    Ok(())
+}
+
 impl Devices {
     pub fn enumerate() -> Result<Self, rusb::Error> {
         let rusb_devices = rusb::Context::new()?.devices()?;
@@ -169,7 +188,7 @@ impl IntoIterator for Devices {
 }
 
 impl Device {
-    pub fn new(info: DeviceInfo) -> Result<Self, rusb::Error> {
+    pub fn new(info: &DeviceInfo) -> Result<Self, rusb::Error> {
         let mut handle = info.device.open()?;
 
         if handle.kernel_driver_active(0)? {
@@ -204,7 +223,7 @@ impl Device {
 
         debug!("device successfully initialized");
         Ok(Device {
-            info,
+            info: info.clone(),
             handle,
             tag: 0xdeadbeef,
             pending: false,

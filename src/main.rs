@@ -15,6 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use crate::asm2x6x::Info;
 use asm2x6xtool::*;
 use clap::{Parser, Subcommand};
 use env_logger::{Builder, Env};
@@ -54,8 +55,16 @@ struct Cli {
     command: Commands,
 }
 
+pub fn find_devices() -> Result<Vec<Box<dyn Info>>, crate::error::Error> {
+    let mut devices = Vec::<Box<dyn Info>>::new();
+
+    crate::usb::find_devices(&mut devices)?;
+
+    Ok(devices)
+}
+
 fn find_device(name: Option<String>) -> Result<asm2x6x::Device, Box<dyn std::error::Error>> {
-    let devices = usb::Devices::enumerate()?;
+    let devices = find_devices()?;
 
     if devices.is_empty() {
         return Err("no devices found".into());
@@ -63,14 +72,20 @@ fn find_device(name: Option<String>) -> Result<asm2x6x::Device, Box<dyn std::err
 
     match name {
         None => {
-            let usbdev = usb::Device::new(devices.into_iter().next().unwrap())?;
-            return Ok(asm2x6x::Device::new(Box::new(usbdev)));
+            return Ok(asm2x6x::Device::new(
+                devices
+                    .into_iter()
+                    .next()
+                    .expect(
+                        "devices.is_empty() was false but devices.into_iter().next() returned None",
+                    )
+                    .open()?,
+            ));
         }
         Some(name) => {
             for device in devices.into_iter() {
                 if device.to_string() == name {
-                    let usbdev = usb::Device::new(device)?;
-                    return Ok(asm2x6x::Device::new(Box::new(usbdev)));
+                    return Ok(asm2x6x::Device::new(device.open()?));
                 }
             }
         }
@@ -100,14 +115,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Commands::ListDevices => {
-            let devices = usb::Devices::enumerate()?;
+            let devices = find_devices()?;
 
             if devices.is_empty() {
                 info!("no devices found");
             }
 
             for device in devices.into_iter() {
-                info!("{} - {}", device.to_string(), device.model);
+                info!("{} - {}", device.to_string(), device.model());
             }
         }
     }
