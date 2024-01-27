@@ -61,12 +61,22 @@ fn find_device(name: Option<String>) -> Result<asm2x6x::Device, Box<dyn std::err
         return Err("no devices found".into());
     }
 
-    if name.is_none() {
-        let usbdev = usb::Device::new(devices.into_iter().next().unwrap())?;
-        return Ok(asm2x6x::Device::new(Box::new(usbdev)));
+    match name {
+        None => {
+            let usbdev = usb::Device::new(devices.into_iter().next().unwrap())?;
+            return Ok(asm2x6x::Device::new(Box::new(usbdev)));
+        }
+        Some(name) => {
+            for device in devices.into_iter() {
+                if device.to_string() == name {
+                    let usbdev = usb::Device::new(device)?;
+                    return Ok(asm2x6x::Device::new(Box::new(usbdev)));
+                }
+            }
+        }
     }
 
-    todo!("parse name and find matching device");
+    return Err("device not found".into());
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -97,10 +107,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             for device in devices.into_iter() {
-                info!(
-                    "usb:{:03x}:{:03x} - {}",
-                    device.usb_bus, device.usb_addr, device.model
-                );
+                info!("{} - {}", device.to_string(), device.model);
             }
         }
     }

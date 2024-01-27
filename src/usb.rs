@@ -19,6 +19,7 @@ use crate::asm2x6x::{Backend, Model};
 use crate::error::Error;
 use log::{debug, error, info};
 use rusb::UsbContext;
+use std::string::ToString;
 use std::vec::IntoIter;
 
 const ASMEDIA_VID: u16 = 0x174c;
@@ -34,6 +35,12 @@ pub struct DeviceInfo {
     pub usb_bus: u8,
     pub usb_addr: u8,
     pub model: Model,
+}
+
+impl ToString for DeviceInfo {
+    fn to_string(&self) -> String {
+        format!("usb:{:03}:{:03}", self.usb_bus, self.usb_addr,)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
